@@ -670,24 +670,23 @@ slowmoBtn.addEventListener('click',doSlowmo);
 slowmoBtn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();doSlowmo();},{passive:false});
 window.addEventListener('resize',layoutSlots);
 
-// ---- leaderboard (Supabase) ----
-// NOTE: the anon key below is public by design. Insert/score integrity MUST be
-// enforced server-side (Postgres RLS + a validating RPC/Edge Function that
-// rate-limits, bounds the score, and whitelists the name). The client cannot
-// prevent spoofed POSTs; rendering here is XSS-safe (createElement + textContent).
-const SB_URL='https://tnkbfftsyzewhxwmannz.supabase.co';
-const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRua2JmZnRzeXpld2h4d21hbm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDU5ODQsImV4cCI6MjA4OTE4MTk4NH0.7u5brYJv102hbx1g3slTJlX6ihzwgl_pYKzs_PlMeHI';
+// ---- leaderboard ----
+// Backend is a same-origin Cloudflare Pages Function at /api/scores, backed by a
+// D1 database (see functions/api/scores.js). All validation/clamping happens
+// server-side; rendering here is XSS-safe (createElement + textContent).
+// On hosts without the function (e.g. GitHub Pages), calls 404 and the board
+// simply shows empty — the game still plays and personal best still saves locally.
 async function fetchLeaderboard(){
   try{
-    const r=await fetch(SB_URL+'/rest/v1/scores?select=name,score,filed,accuracy&order=score.desc&limit=10',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    const r=await fetch('/api/scores',{headers:{'Accept':'application/json'}});
+    if(!r.ok)return [];
     const data=await r.json();return Array.isArray(data)?data:[];
   }catch(e){return [];}
 }
 function sanitizeName(n){return String(n).replace(/[<>]/g,'').replace(/\s+/g,' ').trim().slice(0,16);}
 async function submitScore(name,scoreVal,filedVal,accuracy){
   try{
-    await fetch(SB_URL+'/rest/v1/scores',{method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    await fetch('/api/scores',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({name:sanitizeName(name),score:Math.max(0,Math.floor(Number(scoreVal)||0)),filed:Math.max(0,Math.floor(Number(filedVal)||0)),accuracy:Math.max(0,Math.min(100,Math.floor(Number(accuracy)||0)))})});
   }catch(e){}
 }
